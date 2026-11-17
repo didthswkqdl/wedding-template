@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>청첩장 관리자</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235E4A3B'/%3E%3Cpath d='M16 24s-7-4.4-8.8-8.9A4.8 4.8 0 0 1 16 11a4.8 4.8 0 0 1 8.8 4.1C23 19.6 16 24 16 24z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/admin.css?v=2">
+</head>
+<body>
+
+<div class="demo-banner" id="demoBanner" hidden>
+  미리보기 모드 · API_URL 이 비어 있어 아무 비밀번호로나 로그인됩니다. 실제 Google Sheets 와 연결되어 있지 않습니다.
+</div>
+
+<!-- 로그인 -->
+<main class="login" id="loginView" hidden>
+  <form class="login__card" id="loginForm" novalidate>
+    <p class="login__eyebrow">ADMIN</p>
+    <h1 class="login__title">청첩장 관리자</h1>
+    <label class="field">
+      <span class="field__label">관리자 비밀번호</span>
+      <input class="input" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128">
+    </label>
+    <p class="form__error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn--primary btn--block" type="submit" id="loginBtn">로그인</button>
+    <p class="hint">비밀번호는 Google 스프레드시트 메뉴<br>[💌 청첩장 관리 → ② 관리자 비밀번호 설정]에서 정합니다.</p>
+  </form>
+</main>
+
+<!-- 관리 화면 -->
+<main class="dash" id="dashView" hidden>
+  <header class="dash__top">
+    <h1 class="dash__title">청첩장 관리</h1>
+    <div class="dash__tools">
+      <a class="btn btn--ghost btn--sm" id="sheetLink" target="_blank" rel="noopener noreferrer" hidden>시트 열기</a>
+      <button class="btn btn--ghost btn--sm" type="button" id="refreshBtn">새로고침</button>
+      <button class="btn btn--ghost btn--sm" type="button" id="logoutBtn">로그아웃</button>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" type="button" role="tab" data-tab="content" aria-selected="true">청첩장 내용</button>
+    <button class="tab" type="button" role="tab" data-tab="photos" aria-selected="false">사진 관리</button>
+    <button class="tab" type="button" role="tab" data-tab="comments" aria-selected="false">사진 댓글</button>
+    <button class="tab" type="button" role="tab" data-tab="guestbook" aria-selected="false">방명록</button>
+  </nav>
+
+  <!-- 청첩장 내용 -->
+  <section class="panel" id="panel-content" role="tabpanel">
+    <p class="hint hint--left">
+      이름·날짜·예식장·문구·교통·계좌 등 청첩장의 모든 내용을 여기서 고칩니다. <b>[저장]</b>을 누르면 청첩장에 바로 반영됩니다(청첩장 새로고침).<br>
+      ※ 카카오톡으로 링크를 보낼 때 뜨는 미리보기 제목·사진은 index.html 파일에서만 바꿀 수 있습니다.
+    </p>
+    <div id="contentForm"></div>
+    <div class="savebar" id="contentSavebar">
+      <span class="savebar__msg" id="contentSaveMsg">저장된 내용과 같습니다</span>
+      <a class="btn btn--ghost btn--sm" href="index.html" target="_blank" rel="noopener">청첩장 보기</a>
+      <button class="btn btn--primary btn--sm" type="button" id="saveContent" disabled>저장</button>
+    </div>
+  </section>
+
+  <!-- 사진 관리 -->
+  <section class="panel" id="panel-photos" role="tabpanel" hidden>
+    <div class="card">
+      <h2 class="card__title">사진 추가</h2>
+      <label class="dropzone">
+        <input type="file" id="fileInput" accept="image/*" multiple>
+        <strong>사진 선택하기</strong>
+        <span>여러 장을 한 번에 고를 수 있어요. 긴 변 2048px로 자동 축소된 뒤<br>Google Drive 사진 폴더에 저장되고 갤러리에 바로 추가됩니다.</span>
+      </label>
+      <ul class="queue" id="uploadQueue"></ul>
+
+      <details class="url-add">
+        <summary>링크로 추가하기 (Google Drive 공유 링크 · 이미지 주소)</summary>
+        <form class="url-add__form" id="urlForm" novalidate>
+          <input class="input input--sm" name="url" type="text" placeholder="https://drive.google.com/file/d/…/view 또는 images/01.jpg" required>
+          <input class="input input--sm" name="description" type="text" maxlength="200" placeholder="사진 설명 (선택)">
+          <button class="btn btn--primary btn--sm" type="submit">추가</button>
+        </form>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2 class="card__title">사진 목록 <small id="photoCount"></small></h2>
+        <button class="btn btn--primary btn--sm" type="button" id="saveOrder" disabled>변경사항 저장</button>
+      </div>
+      <p class="hint hint--left">↑ ↓ 버튼으로 노출 순서를 바꾸고 설명을 고친 뒤 <b>[변경사항 저장]</b>을 눌러주세요. 위에 있을수록 먼저 보입니다.</p>
+      <ol class="photo-list" id="photoList"></ol>
+    </div>
+  </section>
+
+  <!-- 사진 댓글 -->
+  <section class="panel" id="panel-comments" role="tabpanel" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <select class="input input--sm" id="commentFilter" aria-label="사진 선택"></select>
+        <input class="input input--sm" id="commentSearch" type="search" placeholder="닉네임·내용 검색">
+      </div>
+      <p class="result" id="commentResult"></p>
+      <ul class="items" id="commentAdminList"></ul>
+    </div>
+  </section>
+
+  <!-- 방명록 -->
+  <section class="panel" id="panel-guestbook" role="tabpanel" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <input class="input input--sm" id="gbSearch" type="search" placeholder="닉네임·내용 검색">
+      </div>
+      <p class="result" id="gbResult"></p>
+      <ul class="items" id="gbAdminList"></ul>
+    </div>
+  </section>
+
+  <div class="loading" id="loading" hidden><div class="spinner"></div></div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js?v=2"></script>
+<script src="js/mock.js?v=2"></script>
+<script src="js/api.js?v=2"></script>
+<script src="js/admin.js?v=2"></script>
+</body>
+</html>
